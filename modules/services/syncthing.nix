@@ -195,7 +195,7 @@ in {
       };
 
       passwordFile = mkOption {
-        type = nullOr path;
+        type = nullOr str;
         default = null;
         description = ''
           Path to the gui password file.
