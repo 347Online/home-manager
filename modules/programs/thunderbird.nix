@@ -155,6 +155,30 @@ let
     '') prefs)}
     ${extraPrefs}
   '';
+
+  # TODO: Explore using an INI generator from nixpkgs?
+  # INFO: Should logging have an associated option?
+  filterIniHeader = ''
+    version="9"
+    logging="no"
+  '';
+
+  mkFilterToIniString = f: ''
+    name="${f.name}"
+    enabled="${if f.enabled then "yes" else "no"}"
+    type="${f.type}"
+    action="${f.action}"
+    actionValue="${f.actionValue}"
+    condition="${f.condition}"
+  '';
+
+  mkFilterListToIni = filters:
+    filterIniHeader + concatStrings (map (f: mkFilterToIniString f) filters);
+
+  getEmailAccountsForProfile = profileName: accounts:
+    (filter (a:
+      a.thunderbird.profiles == [ ]
+      || any (p: p == profileName) a.thunderbird.profiles) accounts);
 in {
   meta.maintainers = with hm.maintainers; [ d-dervishi jkarlson ];
 
@@ -408,6 +432,27 @@ in {
                 argument is an automatically generated identifier.
               '';
             };
+
+            messageFilters = mkOption {
+              type = (types.listOf (types.attrs));
+              default = [ ];
+              defaultText = literalExpression "[ ]";
+              example = literalExpression ''
+                [
+                  {
+                    name = "Mark as Read on Archive";
+                    enabled = "yes";
+                    type = "128";
+                    action = "Mark read";
+                    condition = "ALL";
+                  }
+                ]
+              '';
+              description = ''
+                A list of thunderbird message filters which will be added to
+                the account
+              '';
+            };
           };
         });
     };
@@ -463,9 +508,7 @@ in {
         mkIf (profile.userContent != "") { text = profile.userContent; };
 
       "${thunderbirdProfilesPath}/${name}/user.js" = let
-        emailAccounts = filter (a:
-          a.thunderbird.profiles == [ ]
-          || any (p: p == name) a.thunderbird.profiles) enabledAccountsWithId;
+        emailAccounts = getEmailAccountsForProfile name enabledAccountsWithId;
 
         smtp = filter (a: a.smtp != null) emailAccounts;
 
@@ -514,6 +557,15 @@ in {
           recursive = true;
           force = true;
         };
-    }));
+    }) ++ (mapAttrsToList (name: profile:
+      let
+        emailAccountsWithFilters =
+          (filter (a: a.thunderbird.messageFilters != [ ])
+            (getEmailAccountsForProfile name enabledAccountsWithId));
+      in (builtins.listToAttrs (map (a: {
+        name =
+          "${thunderbirdConfigPath}/${name}/ImapMail/${a.id}/msgFilterRules.dat";
+        value = { text = mkFilterListToIni a.thunderbird.messageFilters; };
+      }) emailAccountsWithFilters))) cfg.profiles));
   };
 }
