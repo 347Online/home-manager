@@ -157,16 +157,19 @@ let
   '';
 
   mkFilterToIniString = f:
-    ''
-      name="${f.name}"
-      enabled="${if f.enabled then "yes" else "no"}"
-      type="${f.type}"
-      action="${f.action}"
-    '' + optionalString (f.actionValue != null) ''
-      actionValue="${f.actionValue}"
-    '' + ''
-      condition="${f.condition}"
-    '';
+    if f.text == null then
+      ''
+        name="${f.name}"
+        enabled="${if f.enabled then "yes" else "no"}"
+        type="${f.type}"
+        action="${f.action}"
+      '' + optionalString (f.actionValue != null) ''
+        actionValue="${f.actionValue}"
+      '' + ''
+        condition="${f.condition}"
+      '' + optionalString (f.extraConfig != null) f.extraConfig
+    else
+      f.text;
 
   mkFilterListToIni = filters:
     ''
@@ -462,6 +465,19 @@ in {
                     condition = mkOption {
                       type = str;
                       description = "Condition to match messages against.";
+                    };
+                    extraConfig = mkOption {
+                      type = nullOr str;
+                      default = null;
+                      description = "Extra settings to apply to the filter";
+                    };
+                    text = mkOption {
+                      type = nullOr str;
+                      default = null;
+                      description = ''
+                        The raw text of the filter.
+                        Note that this will override all other options.
+                      '';
                     };
                   };
                 });
